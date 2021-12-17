@@ -88,7 +88,7 @@ from collections import defaultdict
 from enum import Enum
 from math import prod
 
-lines = str()
+lines =  str()
 with open('input.txt') as file:
     lines = [k.strip() for k in file.readlines()]
 
@@ -150,7 +150,7 @@ def packetsFromBinaryEncoded(binaryData):
             packet.lengthTypeID = int(binaryData[position], 2)
             position += 1 # increment position in binaryData 
             if packet.lengthTypeID == 0:
-                subBits = int(binaryData[position:position+15], 2)
+                numSubBits = int(binaryData[position:position+15], 2)
                 position += 15 # increment the position in the binary data to mark the next read inValue index 
                 sp, bitsProcessed = getSubPackets(binaryData[position:], numBits = numSubBits)
                 packet.subPackets.extend(sp)
@@ -162,7 +162,153 @@ def packetsFromBinaryEncoded(binaryData):
                 position += bitsProcessed
     return packet
 
-# Given the binary data and either: number of bits or subPackets, or the number of subPackets to form into Packet, return a list of those packets
-# def getSubPackets(binaryData, numBits = -1, numPackets = -1):
-  
+# Given the binary data and either: number of bits or # of subPackets -> return a list of those packets
+def getSubPackets(binaryData, numBits = -1, numPackets = -1):
+	packets = []
+	if (numBits == -1 and numPackets == -1) or (numBits != -1 and numPackets != -1):
+		raise Exception("Must provide Either numBits or numPackets! -> ")
+	elif numBits != -1:
+		bitsProcessed = 0
+		position = 0
+		while bitsProcessed < numBits:
+			newPacket = Packet()
+			newPacket.version = int(binaryData[position:position+3], 2)
+			position += 3
+			newPacket.type = Packet.PacketType(int(binaryData[position:position+3], 2))
+			position += 3
+
+			if newPacket.type == Packet.PacketType.literal:
+				nibble = False
+				fullData = ''
+				while not nibble:
+					prefix = int(binaryData[position], 2)
+					position += 1
+					fullData += binaryData[position:position+4]
+					position += 4
+				newPacket.value = int(fullData, 2)
+
+			else:
+				newPacket.lengthTypeID = int(binaryData[position], 2)
+				position += 1
+				if newPacket.lengthTypeID == 0:
+					numSubBits = int(binaryData[position:position+15], 2)
+					position += 15
+					sp, bitsProcessed = getSubPackets(binaryData[position:], numBits = numSubBits)
+					newPacket.subPackets.extend(sp)
+					position += bitsProcessed
+				else:
+					numSubPackets = int(binaryData[position:position+11] , numBits = numSubBits)
+					position += 11
+					sp , bitsProcessed = getSubPackets(binaryData[position:], numPackets = numSubPackets)
+					newPacket.subPackets.extend(sp)
+					position += bitsProcessed
+			
+			# end processing of sub-packet list -> add to list and increment the counter
+			packets.append(newPacket)
+			bitsProcessed = position
+
+		#return the list of sub packets that we processed, along with the position marker which indicates where we are in the binary data 
+		return packets, position
+	elif numPackets != -1:
+		position = 0
+		subPacketsProcessed = 0
+		while subPacketsProcessed < numPackets:
+			newPacket = Packet()
+			newPacket.version = int(binaryData[position:position+3], 2)
+			position += 3
+			newPacket.type = Packet.PacketType(int(binaryData[position:position+3], 2))
+			position += 3
+
+			if newPacket.type == Packet.PacketType.literal:
+				nibble = False
+				fullData = ''
+				while not nibble:
+					prefix = int(binaryData[position], 2)
+					position += 1
+					if prefix == 0: nibble = True
+					fullData += binaryData[position:position+4] 
+					position += 4
+				newPacket.value = int(fullData, 2)
+			else:
+				newPacket.lengthTypeID = int(binaryData[position],2)
+				position += 1
+				if newPacket.lengthTypeID == 0:
+					numSubBits = int(binaryData[position:position+15], 2)
+					position += 15
+					sp, bitsProcessed = getSubPackets(binaryData[position:], numBits= numSubBits)
+					newPacket.subPackets.extend(sp)
+					position += bitsProcessed
+				else:
+					numSubPackets = int(binaryData[position:position+11], 2)
+					position += 11
+					sp, bitsProcessed = getSubPackets(binaryData[position:] , numPackets= numSubPackets)
+					newPacket.subPackets.extend(sp)
+					position += bitsProcessed
+			#finished processing this sub-packet-> add to list and increment the counter
+			packets.append(newPacket)
+			subPacketsProcessed += 1
+
+		# return the final list of the sub-packets we processed, along with the position which is where we are in the binary Data.
+		return packets, position
+
+
+def sumPacketVersions(packets):
+	versionSum = 0
+	for packet in packets:
+		versionSum += packet.version
+		if len(packet.subPackets) > 0:
+			versionSum += sumPacketVersions(packet.subPackets)
+	return versionSum
+
+def solvePart1(lines):
+	binaryReadIn = bin(int(lines[0], 16))[2:]
+	binaryReadIn =binaryReadIn.zfill(len(lines[0] * 4)) #all leading 0's will be truncated by bin().
+	packet = packetsFromBinaryEncoded(binaryReadIn) # 1 single outer packet being passed in -> this packet may contain  its own sub-packets
+	return packet
+
+# --- Part Two ---
+# Now that you have the structure of your transmission decoded, you can calculate the value of the expression it represents.
+
+# Literal values (type ID 4) represent a single number as described above. The remaining type IDs are more interesting:
+
+# Packets with type ID 0 are sum packets - their value is the sum of the values of their sub-packets. If they only have a single sub-packet, their value is the value of the sub-packet.
+# Packets with type ID 1 are product packets - their value is the result of multiplying together the values of their sub-packets. If they only have a single sub-packet, their value is the value of the sub-packet.
+# Packets with type ID 2 are minimum packets - their value is the minimum of the values of their sub-packets.
+# Packets with type ID 3 are maximum packets - their value is the maximum of the values of their sub-packets.
+# Packets with type ID 5 are greater than packets - their value is 1 if the value of the first sub-packet is greater than the value of the second sub-packet; otherwise, their value is 0. These packets always have exactly two sub-packets.
+# Packets with type ID 6 are less than packets - their value is 1 if the value of the first sub-packet is less than the value of the second sub-packet; otherwise, their value is 0. These packets always have exactly two sub-packets.
+# Packets with type ID 7 are equal to packets - their value is 1 if the value of the first sub-packet is equal to the value of the second sub-packet; otherwise, their value is 0. These packets always have exactly two sub-packets.
+# Using these rules, you can now work out the value of the outermost packet in your BITS transmission.
+
+# For example:
+
+# C200B40A82 finds the sum of 1 and 2, resulting in the value 3.
+# 04005AC33890 finds the product of 6 and 9, resulting in the value 54.
+# 880086C3E88112 finds the minimum of 7, 8, and 9, resulting in the value 7.
+# CE00C43D881120 finds the maximum of 7, 8, and 9, resulting in the value 9.
+# D8005AC2A8F0 produces 1, because 5 is less than 15.
+# F600BC2D8F produces 0, because 5 is not greater than 15.
+# 9C005AC2F8F0 produces 0, because 5 is not equal to 15.
+# 9C0141080250320F1802104A08 produces 1, because 1 + 3 = 2 * 2.
+# What do you get if you evaluate the expression represented by your hexadecimal-encoded BITS transmission?
+
+def solvePart2(packet):
+	return packet.getValue()
+
+start = timer()
+packet = solvePart1(lines)
+p = sumPacketVersions([packet])
+end = timer()
+print("Part 1:", p)
+print("Time (msec):" , (end - start) * 1000)
+print()
+
+start = timer()
+p2 = solvePart2(packet)
+end = timer()
+print("Part 2: ", p2)
+print("Time (msec):", (end - start) * 1000)
+print()
+
+
 
