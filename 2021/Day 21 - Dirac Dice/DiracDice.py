@@ -54,7 +54,7 @@ dice = Die() # instantiate an instance of the class
 position = [player1_start - 1, player2_start - 1]
 score = [0 , 0]
 while True:
-    position[0] = (position[0] + dice.roll()) % 10
+    position[0] = (position[0] + dice.roll()) % 10 # There are 10 spaces clockwise 
     score[0] += position[0] + 1
     if score[0] >= 1000: # the game is over
         print(f"Part 1: {score[1] * (dice.num - 1)}")
@@ -73,7 +73,8 @@ while True:
 # The game is played the same as before, although to prevent things from getting too far out of hand, the game now ends when either player's score reaches at least 21.
 # Using the same starting positions as in the example above, player 1 wins in 444356092776315 universes, while player 2 merely wins in 341960390180808 universes.
 # Using your given starting positions, determine every possible outcome. Find the player that wins in more universes; in how many universes does that player win?
-player1_wins = 0
+
+player1_wins = 0 # Win counter - Per player 
 player2_wins = 0
 game_states= defaultdict(int)
 game_states[(player1_start - 1, player2_start - 1, 0, 0)] = 1
@@ -83,15 +84,15 @@ while len(game_states) > 0: # While there are still game states left to read in
     new_states = defaultdict(int)
     for state, count in game_states.items():
         for k in dice_rolls:
-            new_position = (state[0] + k) % 10
-            new_score = state[2] + new_position + 1
+            new_position = (state[0] + k) % 10 # 10 spaces clockwise, calculate new position --> per 'universe per dice roll'
+            new_score = state[2] + new_position + 1 # update the score
             if new_score >= 21:  #game now ends when either players score reaches at least 21
-                player1_wins += count
+                player1_wins += count # if this game was a win add the score to the total counter 
             else:
-                new_states[(new_position, state[1], new_score, state[3])] += count
+                new_states[(new_position, state[1], new_score, state[3])] += count # otherwise update the dictionary with the new game state and CONTINUE
     game_states = new_states
 
-    # player 2
+    # player 2 - Basically same as above but for player 2
     new_states = defaultdict(int)
     for state, count in game_states.items():
         for j in dice_rolls:
@@ -102,5 +103,5 @@ while len(game_states) > 0: # While there are still game states left to read in
             else:
                 new_states[(state[0], new_position, state[2], new_score)] += count
     game_states = new_states
-print(f"Part 2: {max(player1_wins, player2_wins)}; {player1_wins=}, {player2_wins=}")
+print(f"Part 2: {max(player1_wins, player2_wins)}; {player1_wins=}, {player2_wins=}") # find the max of the two players win counters, and return that number 
 
